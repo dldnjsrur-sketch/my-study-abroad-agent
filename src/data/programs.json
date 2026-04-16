@@ -1,0 +1,42 @@
+[
+  {
+    "id": 1,
+    "school": "Northeastern University",
+    "program": "MS in Computer Science Align",
+    "tuition": "$55,000/年",
+    "deadline": "12月15日",
+    "friendlyLevel": "非常友好"
+  },
+  {
+    "id": 2,
+    "school": "University of Pennsylvania",
+    "program": "Master of Computer and Information Technology",
+    "tuition": "$60,000/年",
+    "deadline": "1月5日",
+    "friendlyLevel": "友好"
+  },
+  {
+    "id": 3,
+    "school": "Georgia Institute of Technology",
+    "program": "MS in Computer Science for Non-Majors",
+    "tuition": "$45,000/年",
+    "deadline": "12月1日",
+    "friendlyLevel": "非常友好"
+  },
+  {
+    "id": 4,
+    "school": "University of Chicago",
+    "program": "Master of Science in Computer Science (MSCAPP)",
+    "tuition": "$58,000/年",
+    "deadline": "1月15日",
+    "friendlyLevel": "友好"
+  },
+  {
+    "id": 5,
+    "school": "Columbia University",
+    "program": "MS in Computer Science (Bridge)",
+    "tuition": "$62,000/年",
+    "deadline": "12月15日",
+    "friendlyLevel": "友好"
+  }
+]
