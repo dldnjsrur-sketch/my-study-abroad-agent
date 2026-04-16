@@ -12,5 +12,7 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/llm-api/, '')
       }
     }
-  }
+  },
+  // 添加 base 配置，适应 GitHub Pages 部署
+  base: '/my-study-abroad-agent/'
 })
