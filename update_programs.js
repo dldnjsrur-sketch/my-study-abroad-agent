@@ -203,15 +203,83 @@ function processSearchResults(results, region) {
 
 function updateDataFile(programs) {
     /* 更新本地数据文件 */
-    // 为每个项目添加ID
+    // 读取旧数据
+    let oldPrograms = [];
+    try {
+        if (fs.existsSync(DATA_FILE)) {
+            const oldData = fs.readFileSync(DATA_FILE, 'utf-8');
+            oldPrograms = JSON.parse(oldData);
+        }
+    } catch (error) {
+        console.error('读取旧数据失败:', error);
+    }
+    
+    // 创建旧项目的唯一标识符集合
+    const oldProgramKeys = new Set();
+    oldPrograms.forEach(program => {
+        const key = `${program.school}-${program.program}`;
+        oldProgramKeys.add(key);
+    });
+    
+    // 为每个项目添加ID和新标记
+    let newProgramsCount = 0;
     for (let i = 0; i < programs.length; i++) {
         programs[i].id = i + 1;
+        // 检查是否是新项目
+        const key = `${programs[i].school}-${programs[i].program}`;
+        const isNew = !oldProgramKeys.has(key);
+        programs[i].isNew = isNew;
+        if (isNew) newProgramsCount++;
+    }
+    
+    // 版本管理
+    const versionDir = './versions';
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const versionFileName = `programs-${timestamp}.json`;
+    const versionPath = `${versionDir}/${versionFileName}`;
+    
+    // 备份旧数据
+    if (oldPrograms.length > 0) {
+        fs.writeFileSync(versionPath, JSON.stringify(oldPrograms, null, 2), 'utf-8');
+        console.log(`已备份旧数据到: ${versionPath}`);
     }
     
     // 写入文件
     fs.writeFileSync(DATA_FILE, JSON.stringify(programs, null, 2), 'utf-8');
     
-    console.log(`数据文件已更新，共 ${programs.length} 个项目`);
+    // 更新版本记录
+    updateVersionLog(oldPrograms.length, programs.length, newProgramsCount, versionFileName);
+    
+    console.log(`数据文件已更新，共 ${programs.length} 个项目，其中 ${newProgramsCount} 个是新项目`);
+}
+
+function updateVersionLog(oldCount, newCount, newProgramsCount, versionFileName) {
+    /* 更新版本记录 */
+    const logFile = './versions/version_log.json';
+    let versionLog = [];
+    
+    try {
+        if (fs.existsSync(logFile)) {
+            const logData = fs.readFileSync(logFile, 'utf-8');
+            versionLog = JSON.parse(logData);
+        }
+    } catch (error) {
+        console.error('读取版本记录失败:', error);
+    }
+    
+    const newVersion = {
+        version: versionLog.length + 1,
+        timestamp: new Date().toISOString(),
+        oldCount: oldCount,
+        newCount: newCount,
+        newProgramsCount: newProgramsCount,
+        backupFile: versionFileName,
+        changes: `更新了 ${newProgramsCount} 个新项目，总项目数从 ${oldCount} 变为 ${newCount}`
+    };
+    
+    versionLog.push(newVersion);
+    fs.writeFileSync(logFile, JSON.stringify(versionLog, null, 2), 'utf-8');
+    console.log(`版本记录已更新，当前版本: ${newVersion.version}`);
 }
 
 async function main() {

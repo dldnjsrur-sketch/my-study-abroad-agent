@@ -1,11 +1,6 @@
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
 import MatchSidebar from './MatchSidebar';
-
-// 初始化 Supabase 客户端
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import programsData from './data/programs.json';
 
 // LLM 分析函数
 const analyzeMatchWithLLM = async (resumeText, program) => {
@@ -51,14 +46,17 @@ ${resumeText}
 `;
 
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    // 检查 baseUrl 是否以 / 结尾，如果不是则添加
+    const apiUrl = baseUrl.endsWith('/') ? `${baseUrl}chat/completions` : `${baseUrl}/chat/completions`;
+    
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "gpt-3.5-turbo", // 或者用户指定的模型
+        model: "glm-4", // 使用 Big Model API 支持的模型
         messages: [
           { role: "system", content: "你是一位资深留学顾问。" },
           { role: "user", content: prompt }
@@ -85,6 +83,7 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [resumeUploaded, setResumeUploaded] = useState(false);
   const [resumeText, setResumeText] = useState('');
+  const [resumeFileName, setResumeFileName] = useState('');
   const [selectedProgram, setSelectedProgram] = useState(null);
   const [matchResult, setMatchResult] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -100,36 +99,38 @@ function App() {
   const [regions, setRegions] = useState(['All']);
   const [majors, setMajors] = useState(['All']);
 
-  // 从 Supabase 获取数据
+  // 从 localStorage 加载简历
   useEffect(() => {
-    const fetchPrograms = async () => {
-      setIsLoadingData(true);
-      try {
-        const { data, error } = await supabase
-          .from('projects')
-          .select('*');
-        
-        if (error) throw error;
-
-        if (data) {
-          setPrograms(data);
-          setFilteredPrograms(data);
-          
-          // 更新筛选选项
-          const uniqueRegions = ['All', ...new Set(data.map(p => p.region).filter(Boolean))];
-          const uniqueMajors = ['All', ...new Set(data.map(p => p.major).filter(Boolean))];
-          setRegions(uniqueRegions);
-          setMajors(uniqueMajors);
-        }
-      } catch (error) {
-        console.error('获取项目数据失败:', error);
-        alert('无法连接到数据库，请检查 Supabase 配置。');
-      } finally {
-        setIsLoadingData(false);
+    const savedResume = localStorage.getItem('savedResume');
+    const savedResumeFileName = localStorage.getItem('savedResumeFileName');
+    if (savedResume) {
+      setResumeText(savedResume);
+      setResumeUploaded(true);
+      if (savedResumeFileName) {
+        setResumeFileName(savedResumeFileName);
       }
-    };
+    }
+  }, []);
 
-    fetchPrograms();
+  // 使用本地数据
+  useEffect(() => {
+    setIsLoadingData(true);
+    try {
+      // 直接使用本地数据
+      setPrograms(programsData);
+      setFilteredPrograms(programsData);
+      
+      // 更新筛选选项
+      const uniqueRegions = ['All', ...new Set(programsData.map(p => p.region).filter(Boolean))];
+      const uniqueMajors = ['All', ...new Set(programsData.map(p => p.major).filter(Boolean))];
+      setRegions(uniqueRegions);
+      setMajors(uniqueMajors);
+    } catch (error) {
+      console.error('加载本地数据失败:', error);
+      alert('无法加载本地数据，请检查数据文件。');
+    } finally {
+      setIsLoadingData(false);
+    }
   }, []);
 
   // 综合处理筛选、搜索和排序
@@ -170,13 +171,32 @@ function App() {
   const handleResumeUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setResumeText(event.target.result);
+      setResumeFileName(file.name);
+      
+      // 检查文件类型
+      if (file.type === 'application/pdf') {
+        // 对于 PDF 文件，我们需要使用 PDF.js 或其他库来解析
+        // 这里我们暂时只保存文件名，实际应用中需要添加 PDF 解析逻辑
+        setResumeText(`PDF 文件: ${file.name}`);
         setResumeUploaded(true);
-        alert('简历内容已读取，现在可以点击项目进行分析了！');
-      };
-      reader.readAsText(file);
+        // 保存到 localStorage
+        localStorage.setItem('savedResume', `PDF 文件: ${file.name}`);
+        localStorage.setItem('savedResumeFileName', file.name);
+        alert('PDF 简历已上传，现在可以点击项目进行分析了！');
+      } else {
+        // 对于文本文件，直接读取内容
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const content = event.target.result;
+          setResumeText(content);
+          setResumeUploaded(true);
+          // 保存到 localStorage
+          localStorage.setItem('savedResume', content);
+          localStorage.setItem('savedResumeFileName', file.name);
+          alert('简历内容已读取，现在可以点击项目进行分析了！');
+        };
+        reader.readAsText(file);
+      }
     }
   };
 
@@ -205,9 +225,14 @@ function App() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <h1 className="text-2xl font-bold text-gray-800">留学辅导工具</h1>
-            <div className="mt-4 md:mt-0">
+            <div className="mt-4 md:mt-0 flex items-center space-x-2">
+              {resumeUploaded && (
+                <span className="text-sm text-gray-600">
+                  已上传: {resumeFileName}
+                </span>
+              )}
               <label className="inline-flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors cursor-pointer">
-                <span className="mr-2">{resumeUploaded ? '简历已上传' : '上传简历'}</span>
+                <span className="mr-2">{resumeUploaded ? '更换简历' : '上传简历'}</span>
                 <input 
                   type="file" 
                   accept=".pdf,.txt" 
@@ -215,6 +240,21 @@ function App() {
                   onChange={handleResumeUpload}
                 />
               </label>
+              {resumeUploaded && (
+                <button 
+                  className="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                  onClick={() => {
+                    localStorage.removeItem('savedResume');
+                    localStorage.removeItem('savedResumeFileName');
+                    setResumeText('');
+                    setResumeFileName('');
+                    setResumeUploaded(false);
+                    alert('简历已清除');
+                  }}
+                >
+                  清除简历
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -301,9 +341,18 @@ function App() {
                       <div className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
                         {program.friendly_level || program.friendlyLevel}
                       </div>
-                      {/* 地区标签 */}
-                      <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                        {program.region}
+                      {/* 地区标签和新标记 */}
+                      <div className="flex items-center space-x-2">
+                        {/* 新标记 */}
+                        {(program.isNew) && (
+                          <div className="text-xs text-red-500 bg-red-50 px-2 py-1 rounded-full font-medium">
+                            【新】
+                          </div>
+                        )}
+                        {/* 地区标签 */}
+                        <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                          {program.region}
+                        </div>
                       </div>
                     </div>
                     
