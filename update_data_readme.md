@@ -2,7 +2,7 @@
 
 ## 功能说明
 
-这个 Python 脚本用于定期更新海外硕士项目数据。它会：
+这个脚本用于定期更新海外硕士项目数据。它会：
 
 1. 调用 Tavily Search API 搜索全球最新的海外硕士项目信息
 2. 搜索范围包括：欧洲、新加坡、澳洲、日本、香港
@@ -11,14 +11,7 @@
 
 ## 环境要求
 
-- Python 3.6+
-- requests 库
-
-## 安装依赖
-
-```bash
-pip install requests
-```
+- Node.js 12+（项目已安装）
 
 ## 获取 Tavily API 密钥
 
@@ -43,13 +36,13 @@ pip install requests
 
 2. 运行脚本：
    ```bash
-   python update_programs.py
+   node update_programs.js
    ```
 
 ### 方法二：直接在命令行中提供 API 密钥
 
 ```bash
-python update_programs.py --api-key your-api-key-here
+node update_programs.js --api-key your-api-key-here
 ```
 
 ## 脚本工作流程

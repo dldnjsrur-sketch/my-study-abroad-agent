@@ -16,16 +16,29 @@ REGIONS = [
     "Hong Kong"
 ]
 
-# 搜索关键词
-SEARCH_QUERY = "computer science master program for non-majors {region} 2026"
+# 搜索关键词 (优化：聚焦“硕士项目招生简章”和“欧盟联合项目”，排除纯排名列表)
+SEARCH_QUERY = "{region} master degree program admissions computer science 2026 OR Erasmus Mundus Joint Master Degree"
 
 # 本地数据文件路径
 DATA_FILE = "src/data/programs.json"
 
+# 常见官方教育域名后缀
+OFFICIAL_DOMAINS = ['.edu', '.ac.uk', '.edu.sg', '.edu.au', '.edu.hk', '.ac.jp', '.ch', '.de', '.nl', '.se', '.fi', '.no', '.dk', '.at', '.be', '.ie', '.it', '.es', '.pt']
+
+def is_official_source(url):
+    """判断 URL 是否为官方教育机构网站"""
+    if not url: return False
+    lower_url = url.lower()
+    return any(domain in lower_url for domain in OFFICIAL_DOMAINS) or \
+           'university' in lower_url or \
+           'college' in lower_url or \
+           'institute' in lower_url or \
+           'erasmus-mundus.eu' in lower_url
+
 def search_tavily(query):
     """调用Tavily Search API搜索信息"""
     url = "https://api.tavily.com/search"
-    params = {
+    payload = {
         "api_key": TAVILY_API_KEY,
         "query": query,
         "search_depth": "advanced",
@@ -33,11 +46,13 @@ def search_tavily(query):
     }
     
     try:
-        response = requests.get(url, params=params)
+        response = requests.post(url, json=payload)
         response.raise_for_status()
         return response.json()
     except Exception as e:
         print(f"搜索失败: {e}")
+        if hasattr(e, 'response') and e.response:
+            print(f"响应内容: {e.response.text}")
         return None
 
 def process_search_results(results, region):
@@ -51,40 +66,93 @@ def process_search_results(results, region):
         title = item.get("title", "")
         url = item.get("url", "")
         content = item.get("content", "")
+        published_date = item.get("published_date", "2026-04-15")
+        
+        lower_title = title.lower()
+        lower_content = content.lower()
+
+        # 1. 严格过滤：排除纯排名、对比列表等无关信息
+        is_pure_ranking = ("ranking" in lower_title or "top 10" in lower_title or "best universities" in lower_title) and \
+                         "program" not in lower_title and "master" not in lower_title
+        
+        if is_pure_ranking:
+            print(f"跳过排名信息: {title}")
+            continue
+
+        # 2. 核心条件：必须是硕士项目招生相关，且属于目标区域或欧盟项目
+        is_master_program = "master" in lower_title or "msc" in lower_title or "postgraduate" in lower_title or "degree" in lower_content
+        is_erasmus = "erasmus" in lower_content or "mundus" in lower_content or "erasmus" in lower_title
+        is_top_ranking_context = "qs" in lower_content or "top 500" in lower_content or "ranking" in lower_content or "university" in lower_title
+
+        if not is_master_program or (not is_erasmus and not is_top_ranking_context):
+            print(f"跳过非项目信息: {title}")
+            continue
+
+        print(f"处理符合要求的项目: {title}")
+        
+        # 3. 官方认证识别
+        is_official = is_official_source(url)
         
         # 提取学校名和项目名
         school = ""
         program = ""
         
-        # 简单的提取逻辑，实际应用中可能需要更复杂的NLP处理
         if " - " in title:
             parts = title.split(" - ")
             if len(parts) >= 2:
                 school = parts[0].strip()
                 program = parts[1].strip()
+        elif ": " in title:
+            parts = title.split(": ")
+            if len(parts) >= 2:
+                school = parts[0].strip()
+                program = parts[1].strip()
+        else:
+            program = title.strip()
+            school = "EU Joint Program" if is_erasmus else "目标大学"
         
-        # 提取学费信息（简化版）
-        tuition = ""
-        if "tuition" in content.lower() or "fee" in content.lower():
-            tuition = "$40,000-$60,000/年"  # 占位符，实际应用中需要提取真实值
+        # 提取学费信息
+        tuition = "咨询官网"
+        import re
+        tuition_match = re.search(r"(?:fee|tuition|cost|price)[:\s]*([^\.\n,]+)", lower_content)
+        if tuition_match:
+            tuition = tuition_match.group(1).strip()
+        elif "tuition" in lower_content or "fee" in lower_content:
+            tuition = "有相关信息，请点击网址查看"
         
-        # 提取申请截止日期（简化版）
-        deadline = ""
-        if "deadline" in content.lower() or "application" in content.lower():
-            deadline = "12月-1月"  # 占位符，实际应用中需要提取真实值
+        # 提取申请截止日期
+        deadline = "未公布"
+        deadline_match = re.search(r"(?:deadline|apply by)[:\s]*([^\.\n,]+)", lower_content)
+        if deadline_match:
+            deadline = deadline_match.group(1).strip()
+        elif "deadline" in lower_content or "application" in lower_content:
+            deadline = "12月-2月（参考）"
         
-        # 跨专业友好度（简化版）
+        # 跨专业友好度
         friendly_level = "友好"
-        if "non-major" in content.lower() or "no background" in content.lower():
+        if "non-major" in lower_content or "no background" in lower_content or "any discipline" in lower_content or "跨专业" in lower_content:
             friendly_level = "非常友好"
+
+        # 提取专业
+        major = "Computer Science"
+        if "data science" in lower_content: major = "Data Science"
+        if "artificial intelligence" in lower_content or "ai" in lower_content: major = "Artificial Intelligence"
+        if "software engineering" in lower_content: major = "Software Engineering"
+        if "cyber security" in lower_content: major = "Cyber Security"
         
-        if school and program:
+        if program:
             processed_programs.append({
                 "school": school,
                 "program": program,
                 "tuition": tuition,
                 "deadline": deadline,
-                "friendlyLevel": friendly_level
+                "friendlyLevel": friendly_level,
+                "url": url,
+                "publishedDate": published_date,
+                "region": region,
+                "major": major,
+                "isOfficial": is_official,
+                "isErasmus": is_erasmus
             })
     
     return processed_programs
